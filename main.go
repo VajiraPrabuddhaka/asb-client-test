@@ -4,19 +4,35 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
+	"nhooyr.io/websocket"
 )
 
 func main() {
 	// Replace with your Service Bus connection string and topic/subscription details
-	connectionString := "<connection_string>"
+	connectionString := "<>"
 	topicName := "vj-test-100"
 	subscriptionName := "vj-test-100-sub-1"
 
+	newWebSocketConnFn := func(ctx context.Context, args azservicebus.NewWebSocketConnArgs) (net.Conn, error) {
+		opts := &websocket.DialOptions{Subprotocols: []string{"amqp"}}
+		wssConn, _, err := websocket.Dial(ctx, args.Host, opts)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return websocket.NetConn(ctx, wssConn, websocket.MessageBinary), nil
+	}
+
 	// Create a Service Bus client
-	client, err := azservicebus.NewClientFromConnectionString(connectionString, nil)
+	client, err := azservicebus.NewClientFromConnectionString(connectionString, &azservicebus.ClientOptions{
+		// TransportType: AMQP over WebSockets, which uses port 443
+		NewWebSocketConn: newWebSocketConnFn,
+	})
 	if err != nil {
 		log.Fatalf("Failed to create client: %s", err)
 	}
